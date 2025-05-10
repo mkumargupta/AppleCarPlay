@@ -13,26 +13,44 @@ import CarPlay
 final class AlertManager {
     static let shared = AlertManager()
     
+    private var isCarPlayAlertShowing = false
     private init() {}
     
     // iPhone alert
     func showAlert(title: String) {
         DispatchQueue.main.async {
             guard let windowScene = UIApplication.shared.connectedScenes
-                    .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-                  let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }),
-                  var topController = keyWindow.rootViewController else {
+                .first(where: {
+                    ($0.activationState == .foregroundActive || $0.activationState == .foregroundInactive)
+                    && $0 is UIWindowScene
+                }) as? UIWindowScene else {
+                print("No active window scene")
                 return
             }
 
-            // Traverse to the top-most presented view controller
+            guard let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first,
+                  var topController = keyWindow.rootViewController else {
+                // Retry after a small delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.showAlert(title: title)
+                }
+                return
+            }
+
             while let presented = topController.presentedViewController {
                 topController = presented
             }
 
+            guard !topController.isBeingPresented && !topController.isBeingDismissed else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.showAlert(title: title)
+                }
+                return
+            }
+
             let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-            topController.present(alert, animated: true, completion: nil)
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            topController.present(alert, animated: true)
         }
     }
     
@@ -40,12 +58,28 @@ final class AlertManager {
     func showCarPlayAlert(title: String, interfaceController: CPInterfaceController?) {
         guard let interfaceController = interfaceController else { return }
 
-        let action = CPAlertAction(title: "OK", style: .default) { _ in
-            interfaceController.dismissTemplate(animated: true, completion: nil)
-        }
-        let alertTemplate = CPAlertTemplate(titleVariants: [title], actions: [action])
+        let presentAlert = {
+            let action = CPAlertAction(title: "OK", style: .default) { _ in
+                interfaceController.dismissTemplate(animated: true, completion: nil)
+                self.isCarPlayAlertShowing = false
+            }
 
-        interfaceController.presentTemplate(alertTemplate, animated: true, completion: nil)
+            let alertTemplate = CPAlertTemplate(titleVariants: [title], actions: [action])
+            interfaceController.presentTemplate(alertTemplate, animated: true) { _, _ in
+                self.isCarPlayAlertShowing = true
+            }
+        }
+
+        if isCarPlayAlertShowing {
+            interfaceController.dismissTemplate(animated: true) { _,_  in
+                self.isCarPlayAlertShowing = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    presentAlert()
+                }
+            }
+        } else {
+            presentAlert()
+        }
     }
     
     // Show alert on both platforms
