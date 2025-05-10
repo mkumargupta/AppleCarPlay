@@ -44,6 +44,7 @@ final class SongListViewController: UIViewController {
         }
         viewModel.onSongSelected = { [weak self] song in
             AlertManager.shared.showAlert(title: song.songname)
+            NotificationCenter.default.post(name: .songSelected, object: song)
         }
     }
 }

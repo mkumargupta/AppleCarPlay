@@ -24,7 +24,6 @@ class CarPlayTemplateApplicationSceneDelegate: NSObject, CPTemplateApplicationSc
             let item = CPListItem(text: song.songname, detailText: song.artistname)
             item.handler = { selectedItem, completion in
                 AlertManager.shared.showCombinedAlert(title: song.songname, interfaceController: interfaceController)
-                NotificationCenter.default.post(name: .songSelected, object: song)
                 completion()
             }
             return item
@@ -36,6 +35,11 @@ class CarPlayTemplateApplicationSceneDelegate: NSObject, CPTemplateApplicationSc
         interfaceController.setRootTemplate(template, animated: true) { _, error in
             if let error = error {
                 print("Failed to set root template: \(error.localizedDescription)")
+            }
+        }
+        NotificationCenter.default.addObserver(forName: .songSelected, object: nil, queue: .main) { notification in
+            if let song = notification.object as? Song {
+                AlertManager.shared.showCarPlayAlert(title: song.songname, interfaceController: interfaceController)
             }
         }
         
